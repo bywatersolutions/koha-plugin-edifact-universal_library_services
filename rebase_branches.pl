@@ -25,7 +25,7 @@ my ( $org, $repo ) = split m{/}, $full_repo, 2;
 say "Org:  $org";
 say "Repo: $repo";
 
-say "\nNot koha-plugin-edifact-enhanced, exiting" && exit 0 unless $repo eq "koha-plugin-edifact-enhanced";
+say "\nNot koha-plugin-edifact-universal-library-services, exiting" && exit 0 unless $repo eq "koha-plugin-edifact-universal-library-services";
 
 qx(git remote);
 qx(git fetch origin);
@@ -39,8 +39,8 @@ say "FOUND REPOS " . Data::Dumper::Dumper( \@repos );
 
 my $failures = 0;
 foreach my $repo (@repos) {
-    next if $repo eq 'koha-plugin-edifact-enhanced';
-    next if $repo eq 'koha-plugin-edifact-enhanced-docs';
+    next if $repo eq 'koha-plugin-edifact-universal-library-services';
+    next if $repo eq 'koha-plugin-edifact-universal-library-services-docs';
 
     say "WORKING ON $repo";
 
