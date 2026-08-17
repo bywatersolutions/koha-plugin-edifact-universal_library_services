@@ -27,7 +27,7 @@ use Koha::EDI;
 use Koha::Items;
 
 ## Here we set our plugin version
-our $VERSION = "4.0.7";
+our $VERSION = "4.4.1";
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
@@ -35,7 +35,7 @@ our $metadata = {
     author          => 'Kyle M Hall',
     description     => 'Edifact Enhanced plugin',
     date_authored   => '2015-12-21',
-    date_updated    => '1900-01-01',
+    date_updated    => '2026-08-17',
     minimum_version => '25.11.00',
     maximum_version => undef,
     version         => $VERSION,
@@ -361,7 +361,7 @@ sub edifact_process_invoice {
                     my $vendor         = Koha::Acquisition::Booksellers->find($basket_vendor_id);
                     my $tax_multiplier = 1;
 
-                    if ( $is_standing || $order->quantity > $line->quantity ) {
+                    if ( $is_standing || $order->quantity > $quantity ) {
                         my $ordered            = $order->quantity;
                         my $quantity_remaining = $is_standing ? 1 : $ordered - $line->quantity;
 
@@ -393,7 +393,21 @@ sub edifact_process_invoice {
                             $received_order = $order_obj->_result;
                         }
 
-                        #FIXME transfer_items( $schema, $line, $order, $received_order, $quantity );
+# A partial receipt creates a new completed aqorders row for the copies
+# received on this invoice. The aqorders_items links remain attached to
+# the original order unless they are explicitly transferred.
+#
+# Koha::EDI::transfer_items() uses the GIR branch information from the
+# invoice line to move the correct number of item links, by homebranch,
+# from the outstanding order to the newly created completed order.
+#
+# This must happen before _receipt_items(), because _receipt_items()
+# looks up items by the received ordernumber. Without the transfer, the
+# completed partial order has no linked items and receipt-time item
+# updates such as dateaccessioned and notforloan are never applied.
+
+                        Koha::EDI::transfer_items( $schema, $line, $order, $received_order, $quantity );
+
                         _receipt_items( $self, $schema, $line, $received_order->ordernumber );
 
                     } else {    # simple receipt all copies on order
