@@ -194,7 +194,17 @@ sub service_string_advice {
     # At present this just validates that the ssa
     # is standard Edifact
     # TBD reset the seps if non standard
-    if ( $ssa ne q{:+.? '} ) {
+
+    # The fifth character is reserved in syntax version 3, where it has to be a
+    # space, and is the repetition separator in version 4, where the default is
+    # an asterisk. Nothing here splits on it, so ignore whatever is declared
+    # rather than refusing an interchange that is otherwise standard. Without
+    # this a version 4 file using nothing but the default separators is thrown
+    # away and the whole interchange parses to no messages at all.
+    my $separators = $ssa;
+    substr( $separators, 4, 1, q{ } ) if length $separators > 4;
+
+    if ( $separators ne q{:+.? '} ) {
         carp " Non standard Service String Advice [$ssa]";
         return;
     }

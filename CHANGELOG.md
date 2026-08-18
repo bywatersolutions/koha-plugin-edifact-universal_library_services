@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Interchanges using EDIFACT syntax version 4 were thrown away in their
+  entirety. `service_string_advice` compared the UNA against the version 3
+  default separators, where the fifth character is reserved and has to be a
+  space. From version 4 that position is the repetition separator, default
+  `*`, so a conformant `UNA:+.?*'` was reported as "Non standard Service String
+  Advice" and the file parsed to no messages at all. Nothing splits on the
+  repetition separator, so whatever is declared there is now ignored. A
+  separator the parser genuinely cannot handle is still refused.
 - Settings after `no_update_item_price` were stored under each other's keys when
   that parameter was missing from a configuration save. `CGI::param` returns an
   empty list rather than undef for an absent parameter, which shifted every
