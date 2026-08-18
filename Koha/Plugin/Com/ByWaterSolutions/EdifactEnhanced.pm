@@ -517,7 +517,7 @@ sub _receipt_items {
         # Source of acquisition, i.e. Vendor ID
         $item->booksellerid( $bookseller->id() );
 
-        my $update_item_price = $self->retrieve_data('no_update_item_price');
+        my $update_item_price = $self->retrieve_data('no_update_item_price') // 'update_both';
         $update_item_price = 'update_both'    if $update_item_price eq '0';
         $update_item_price = 'update_neither' if $update_item_price eq '1';
         if ( $update_item_price eq 'update_both' || $update_item_price eq 'update_price' ) {
