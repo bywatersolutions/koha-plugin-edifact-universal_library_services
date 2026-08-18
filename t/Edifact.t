@@ -17,7 +17,8 @@
 
 use Modern::Perl;
 
-use Test::More tests => 2;
+use Test::More tests => 3;
+use Test::NoWarnings;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact;
 

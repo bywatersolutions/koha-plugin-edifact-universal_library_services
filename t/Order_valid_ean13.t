@@ -17,9 +17,15 @@
 
 use Modern::Perl;
 
-use Test::More tests => 1;
+use Test::More tests => 2;
+use Test::NoWarnings;
 
-use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact::Order;
+BEGIN {
+    # Loading Order pulls in half of Koha, and Koha::Cache warns at load time
+    # when memcached isn't reachable. That noise is not this test's business.
+    local $SIG{__WARN__} = sub { };
+    require Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact::Order;
+}
 
 my $valid = \&Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact::Order::_valid_ean13;
 
