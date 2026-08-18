@@ -29,6 +29,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   segments built from the basket's delivery and billing libraries, with
   selectable party qualifiers (DP/ST and IV/BT).
 
+### Fixed
+
+- Settings after `no_update_item_price` were stored under each other's keys when
+  that parameter was missing from a configuration save. `CGI::param` returns an
+  empty list rather than undef for an absent parameter, which shifted every
+  later key/value pair in the hash by one.
+
+### Changed
+
+- The configuration form now posts rather than gets. The settings, including the
+  invoice adjustment rules and their filters, no longer travel in the query
+  string where a long enough configuration would run into Apache's
+  `LimitRequestLine`.
+
 ### Removed
 
 - The `shipment_charges_alc_dl` handling. It noted an `ALC+C` carrying a `DL`

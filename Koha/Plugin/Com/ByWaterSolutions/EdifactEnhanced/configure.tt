@@ -260,10 +260,12 @@ function check_if_buyer_san_use_library_ean_split_first_part() {
     [% END %]
 
     <!-- Notice our form here has no 'action', this is good, it means that our forms will always get passed back to 'plugins/run.pl'. You could hard code it instead if you prefer -->
-    <form method="get">
+    <form method="post">
         <!-- Always pass these two parameters so the plugin system knows what to execute! -->
         <input type="hidden" name="class" value="[% CLASS %]"/>
         <input type="hidden" name="method" value="[% METHOD %]"/>
+        <!-- Koha rejects a POST without this with "Error 403 - No CSRF token passed" -->
+        [% INCLUDE 'csrf-token.inc' %]
 
         <fieldset id="configuration-options" class="rows" style="display: block;">
             <legend>Configuration options</legend>
