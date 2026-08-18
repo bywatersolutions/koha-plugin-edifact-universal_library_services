@@ -288,7 +288,11 @@ sub moa_amounts {
                 currency  => $s->elem( 0, 2 ),
                 section   => $section,
                 line      => $line,
-                context   => { %message, %group },
+
+                # The MOA is available under its own tag so a filter can match
+                # against it ( e.g. MOA element 0.2 for the currency ) as well
+                # as against the segments governing it.
+                context => { %message, %group, MOA => $s },
                 };
         }
     }

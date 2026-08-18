@@ -205,7 +205,7 @@ Each rule under *Invoice Adjustments from MOA Segments* matches a MOA qualifier.
 
 | Field | Meaning |
 | --- | --- |
-| Segment | A segment tag such as `ALC`, `TAX`, `PAT`, `AJT`, `FTX` or `RFF`, or one of the pseudo-fields `section` (`header`, `line` or `summary`), `line` or `currency`. |
+| Segment | A segment tag such as `ALC`, `TAX`, `PAT`, `AJT`, `FTX` or `RFF`; `MOA` for the amount segment itself (element `0.0` is the qualifier, `0.1` the amount, `0.2` the currency); or one of the pseudo-fields `section` (`header`, `line` or `summary`), `line` or `currency`. |
 | Element | A position within that segment, such as `4` or `4.0`. Leave it empty to test the value against every part of the segment, which is what you want when a vendor doesn't put the code where the standard says it goes. |
 | Operator | `=`, `!=`, `contains` or `matches regex`. |
 | Value | Compared ignoring case and surrounding spaces. |

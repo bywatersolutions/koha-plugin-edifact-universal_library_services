@@ -717,7 +717,8 @@ MOA+8:77.76'</pre>
                 no filters matches on the qualifier alone. Where a rule has several filters, all of them must match.
               </p>
               <ul>
-                <li><strong>Segment</strong> is a segment tag such as <em>ALC</em> or <em>TAX</em>, or one of
+                <li><strong>Segment</strong> is a segment tag such as <em>ALC</em> or <em>TAX</em>, or
+                    <em>MOA</em> for the amount segment itself, or one of
                     <em>section</em> (header, line or summary), <em>line</em> or <em>currency</em>.</li>
                 <li><strong>Element</strong> is a position within that segment, such as <em>4</em> or <em>4.0</em>.
                     Leave it empty to test the value against every part of the segment, which is useful when a vendor

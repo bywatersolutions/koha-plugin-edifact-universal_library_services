@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invoice adjustment rules can now filter on the segments governing a MOA, not
   just its qualifier. A rule can say "MOA+8 where the governing ALC has C&P in
   element 4", which separates charges a vendor sends under a single qualifier.
-  Filters cover any segment plus the pseudo-fields `section`, `line` and
-  `currency`, with `=`, `!=`, `contains` and regex operators. A rule with no
-  filters behaves exactly as before.
+  Filters cover any segment ( including `MOA` itself ) plus the pseudo-fields
+  `section`, `line` and `currency`, with `=`, `!=`, `contains` and regex
+  operators. A rule with no filters behaves exactly as before.
 - A Shipping checkbox on each invoice adjustment rule. When ticked, the rule's
   matched amounts are added to the invoice shipping cost instead of creating an
   adjustment, so a charge a vendor buries under a shared MOA qualifier can go to

@@ -323,7 +323,7 @@ subtest 'moa_matches_filters' => sub {
 };
 
 subtest 'line-level context, pseudo-fields and defensive matching' => sub {
-    plan tests => 13;
+    plan tests => 16;
 
     # A LIN group carrying its own ALC charge, with a currency on the MOA and
     # a zero discount percentage to prove a zero can be matched
@@ -366,6 +366,15 @@ subtest 'line-level context, pseudo-fields and defensive matching' => sub {
         'line filter rejects a different line' );
     ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'currency', op => 'eq', val => 'usd' } ] ),
         'currency filter matches ignoring case' );
+
+    # A filter can name the MOA itself, so its own qualifier, amount and
+    # currency components are matchable ( MOA+8:12.5:USD here )
+    ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'MOA', elem => '0.0', op => 'eq', val => '8' } ] ),
+        'the MOA qualifier can be matched on the MOA segment' );
+    ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'MOA', elem => '0.2', op => 'eq', val => 'USD' } ] ),
+        'the MOA currency can be matched on the MOA segment' );
+    ok( !$line_msg->moa_matches_filters( $charge, [ { seg => 'MOA', elem => '0.1', op => 'eq', val => '99.99' } ] ),
+        'a non-matching MOA amount is rejected' );
 
     # PCD+3:0 puts a legitimate zero in component 0.1
     ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'PCD', elem => '0.1', op => 'eq', val => '0' } ] ),
