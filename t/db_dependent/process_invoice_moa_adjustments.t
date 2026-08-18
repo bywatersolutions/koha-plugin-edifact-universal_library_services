@@ -19,7 +19,7 @@ use Modern::Perl;
 
 use CGI;
 use JSON qw(encode_json);
-use Test::More tests => 3;
+use Test::More tests => 7;
 
 use t::lib::Mocks;
 use t::lib::TestBuilder;
@@ -61,6 +61,67 @@ sub _invoic_string {
         q{'MOA+131:0.50},
         q{'UNT+10+00001},
         q{'UNZ+1+0000000001'};
+}
+
+# A charge-only invoice shaped like a real Brodart one: no line items, a GST TAX
+# group, then one ALC per value-added charge each followed by its own MOA+8.
+# Every charge shares qualifier 8, so only the governing ALC tells them apart.
+sub _brodart_invoic_string {
+    my ($supplier_san) = @_;
+    return join q{},
+        q{UNA:+.? },
+        q{'UNB+UNOC:3+} . $supplier_san . q{+5013546098818+230101:0000+0000000002},
+        q{'UNH+00002+INVOIC:D:96A:UN},
+        q{'BGM+380+INV-MOA-ALC+9},
+        q{'DTM+137:20240115:102},
+        q{'DTM+131:20240114:102},
+        q{'NAD+BY+12345::9},
+        q{'NAD+SU+} . $supplier_san . q{::9},
+        q{'CUX+2:USD:4+3:USD:11},
+        q{'UNS+S},
+        q{'CNT+4:0},
+        q{'MOA+86:677.98},
+        q{'TAX+7+GST++++S},
+        q{'MOA+124:57.62},
+        q{'ALC+C++6++C&P},
+        q{'MOA+8:397.5},
+        q{'ALC+C++6++LFG},
+        q{'MOA+8:47.6},
+        q{'ALC+C++6++JKT},
+        q{'MOA+8:77.76},
+        q{'ALC+C++6++RFI},
+        q{'MOA+8:97.5},
+        q{'UNT+20+00002},
+        q{'UNZ+1+0000000002'};
+}
+
+# Run a Brodart-shaped invoice through the plugin with the given rules and
+# return the adjustments it created, as [ amount, reason ] pairs sorted by
+# amount so the comparisons don't depend on segment order.
+sub _adjustments_for_rules {
+    my ( $san, $rules ) = @_;
+
+    my $vendor = $builder->build_object( { class => 'Koha::Acquisition::Booksellers' } );
+    my $plugin = _new_plugin(
+        invoice_adjustment_rules    => encode_json($rules),
+        skip_nonmatching_san_suffix => '0',
+    );
+    my $msg = _build_invoice_message( $vendor, $san, _brodart_invoic_string($san) );
+
+    {
+        local $SIG{__WARN__} = sub { };
+        eval { $plugin->edifact_process_invoice( { invoice => $msg } ); 1 }
+            or diag("edifact_process_invoice died: $@");
+    }
+
+    my $invoice = Koha::Acquisition::Invoices->search( { invoicenumber => 'INV-MOA-ALC' } )->next;
+    return [] unless $invoice;
+
+    my @rows = map { [ sprintf( '%.2f', $_->adjustment ), $_->reason ] }
+        Koha::Acquisition::Invoice::Adjustments->search( { invoiceid => $invoice->invoiceid } )
+        ->as_list;
+
+    return [ sort { $a->[0] <=> $b->[0] } @rows ];
 }
 
 sub _new_plugin {
@@ -248,6 +309,114 @@ subtest 'no adjustments configured -> no adjustment rows' => sub {
     is( Koha::Acquisition::Invoice::Adjustments->search(
             { invoiceid => $invoice->invoiceid } )->count,
         0, 'no adjustments created' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'an ALC filter picks one charge out of several sharing a qualifier' => sub {
+    plan tests => 1;
+    $schema->storage->txn_begin;
+
+    my $adjustments = _adjustments_for_rules(
+        '5099999000037',
+        [   {   moa_qualifier => '8',
+                filters       => [ { seg => 'ALC', elem => '4.0', op => 'eq', val => 'C&P' } ],
+                reason        => 'VAS',
+                note          => 'cataloging and processing',
+            },
+        ]
+    );
+
+    is_deeply( $adjustments, [ [ '397.50', 'VAS' ] ],
+        'only the C&P charge became an adjustment' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'one rule per charge code splits the charges apart' => sub {
+    plan tests => 1;
+    $schema->storage->txn_begin;
+
+    my $adjustments = _adjustments_for_rules(
+        '5099999000044',
+        [   map {
+                {   moa_qualifier => '8',
+                    filters => [ { seg => 'ALC', elem => '4.0', op => 'eq', val => $_->[0] } ],
+                    reason  => $_->[1],
+                }
+            } ( [ 'C&P', 'CATPROC' ], [ 'LFG', 'LABELS' ], [ 'JKT', 'JACKETS' ], [ 'RFI', 'RFID' ] )
+        ]
+    );
+
+    is_deeply(
+        $adjustments,
+        [   [ '47.60',  'LABELS' ],
+            [ '77.76',  'JACKETS' ],
+            [ '97.50',  'RFID' ],
+            [ '397.50', 'CATPROC' ],
+        ],
+        'each charge landed on its own adjustment with its own reason'
+    );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'every filter on a rule has to match' => sub {
+    plan tests => 2;
+    $schema->storage->txn_begin;
+
+    my $both_match = _adjustments_for_rules(
+        '5099999000051',
+        [   {   moa_qualifier => '8',
+                filters       => [
+                    { seg => 'ALC',     elem => '4.0', op => 'eq', val => 'C&P' },
+                    { seg => 'section', op   => 'eq',  val => 'summary' },
+                ],
+                reason => 'VAS',
+            },
+        ]
+    );
+    is_deeply( $both_match, [ [ '397.50', 'VAS' ] ], 'both filters matching creates the adjustment' );
+
+    $schema->storage->txn_rollback;
+    $schema->storage->txn_begin;
+
+    my $one_fails = _adjustments_for_rules(
+        '5099999000068',
+        [   {   moa_qualifier => '8',
+                filters       => [
+                    { seg => 'ALC',     elem => '4.0', op => 'eq', val => 'C&P' },
+                    { seg => 'section', op   => 'eq',  val => 'line' },
+                ],
+                reason => 'VAS',
+            },
+        ]
+    );
+    is_deeply( $one_fails, [], 'one filter failing creates nothing' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'a rule with no filters still matches on the qualifier alone' => sub {
+    plan tests => 1;
+    $schema->storage->txn_begin;
+
+    # Rules saved before filters existed have no filters key at all. They must
+    # keep creating one adjustment per matching MOA, as they always have.
+    my $adjustments = _adjustments_for_rules(
+        '5099999000075',
+        [ { moa_qualifier => '8', reason => 'VAS' } ]
+    );
+
+    is_deeply(
+        $adjustments,
+        [   [ '47.60',  'VAS' ],
+            [ '77.76',  'VAS' ],
+            [ '97.50',  'VAS' ],
+            [ '397.50', 'VAS' ],
+        ],
+        'all four MOA+8 charges became adjustments'
+    );
 
     $schema->storage->txn_rollback;
 };

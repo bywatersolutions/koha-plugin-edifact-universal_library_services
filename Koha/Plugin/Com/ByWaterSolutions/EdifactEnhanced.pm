@@ -456,20 +456,23 @@ sub edifact_process_invoice {
                         next unless defined $rule->{moa_qualifier} && $rule->{moa_qualifier} ne '';
 
                         foreach my $moa (@$moa_amounts) {
-                            if ( $moa->{qualifier} eq $rule->{moa_qualifier} ) {
-                                Koha::Acquisition::Invoice::Adjustment->new(
-                                    {
-                                        invoiceid     => $invoiceid,
-                                        adjustment    => $moa->{amount},
-                                        reason        => $rule->{reason}    || undef,
-                                        note          => $rule->{note}      || undef,
-                                        budget_id     => $rule->{budget_id} || undef,
-                                        encumber_open => $rule->{encumber_open} ? 1 : 0,
-                                    }
-                                )->store;
+                            next unless $moa->{qualifier} eq $rule->{moa_qualifier};
 
-                                warn "Created invoice adjustment for MOA+$moa->{qualifier}: $moa->{amount}";
-                            }
+                            # A rule with no filters matches on the qualifier alone
+                            next unless $msg->moa_matches_filters( $moa, $rule->{filters} );
+
+                            Koha::Acquisition::Invoice::Adjustment->new(
+                                {
+                                    invoiceid     => $invoiceid,
+                                    adjustment    => $moa->{amount},
+                                    reason        => $rule->{reason}    || undef,
+                                    note          => $rule->{note}      || undef,
+                                    budget_id     => $rule->{budget_id} || undef,
+                                    encumber_open => $rule->{encumber_open} ? 1 : 0,
+                                }
+                            )->store;
+
+                            warn "Created invoice adjustment for MOA+$moa->{qualifier}: $moa->{amount}";
                         }
                     }
                 }
