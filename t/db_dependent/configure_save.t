@@ -35,7 +35,7 @@ subtest 'a missing parameter must not shift the settings that follow it' => sub 
     # by one, storing settings under each other's names. This save leaves out
     # no_update_item_price on purpose.
     my $cgi = CGI->new(
-        'save=1&set_nfl_on_receipt=7&pia_limit=10&invoice_adjustment_rules=[]&shipment_charge_filters=[]');
+        'save=1&set_nfl_on_receipt=7&pia_limit=10&invoice_adjustment_rules=[]');
     my $plugin = Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced->new(
         { enable_plugins => 1, cgi => $cgi } );
 

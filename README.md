@@ -199,21 +199,6 @@ The use of the last order line is arbitrary. The feature basically assumes that 
 When an invoice is received, set it to closed automatically.
 This option is mildly dangerous but highly convenient. It assumes a vendor will always get your shipments to you correctly.
 
-#### Shipping - only these charges
-
-By default the shipping cost for an invoice is the total of every `MOA` whose qualifier is ticked under the `Shipping - MOA+N` options above. That works while a vendor uses a different qualifier for each kind of charge, and stops working when they don't.
-
-Some vendors send freight and every value-added service alike as `MOA+8`, and only the preceding `ALC` says which charge is which:
-
-```
-ALC+C++6++FGT'
-MOA+8:34.10'
-ALC+C++6++C&P'
-MOA+8:397.50'
-```
-
-Leave this setting empty and nothing changes: every ticked qualifier is added up as before. Add a filter of `ALC` / `4.0` / `=` / `FGT` and only the freight counts towards shipping. The fields work exactly like the invoice adjustment filters below.
-
 ### Invoice adjustment filters
 
 Each rule under *Invoice Adjustments from MOA Segments* matches a MOA qualifier. Because a qualifier alone often can't tell two charges apart, a rule can also carry filters tested against the segments governing the MOA. Click a rule's **Filters** button to edit them. A rule with no filters matches on the qualifier alone, and where a rule has several filters all of them must match.
@@ -227,7 +212,7 @@ Each rule under *Invoice Adjustments from MOA Segments* matches a MOA qualifier.
 
 `!=` passes when nothing in the segment matches, so it also passes when the segment isn't there at all.
 
-Tick **Shipping** on a rule to add its matched amounts to the invoice shipping cost instead of creating an adjustment. This is another way to route a charge, like `FGT` freight, into the shipping cost: where the "Shipping - only these charges" option above works on the shipment charge MOA totals, a shipping rule works on the same qualifier-and-filter matching the adjustment rules use. The reason, note, budget and encumber fields don't apply to a shipping rule.
+Tick **Shipping** on a rule to add its matched amounts to the invoice shipping cost instead of creating an adjustment. This routes a charge, like `FGT` freight a vendor buries under a shared `MOA+8`, into the shipping cost rather than an adjustment. The reason, note, budget and encumber fields don't apply to a shipping rule.
 
 For the four charges a vendor might send on one invoice, four rules each filtering `ALC` / `4.0` / `=` on its own code will put each charge on its own adjustment against its own fund:
 

@@ -666,7 +666,6 @@ sub configure {
             skip_previously_downloaded_files               => $self->retrieve_data('skip_previously_downloaded_files') // 1,
             shipping_budget_id                             => $self->retrieve_data('shipping_budget_id'),
             invoice_adjustment_rules                       => $self->retrieve_data('invoice_adjustment_rules') // '[]',
-            shipment_charge_filters                        => $self->retrieve_data('shipment_charge_filters')  // '[]',
         );
 
         print $cgi->header();
@@ -734,7 +733,6 @@ sub configure {
             skip_previously_downloaded_files               => $self->retrieve_data('skip_previously_downloaded_files') // 1,
             shipping_budget_id                             => $self->retrieve_data('shipping_budget_id'),
             invoice_adjustment_rules                       => $self->retrieve_data('invoice_adjustment_rules') // '[]',
-            shipment_charge_filters                        => $self->retrieve_data('shipment_charge_filters')  // '[]',
         };
 
         my $new_settings = {
@@ -799,7 +797,6 @@ sub configure {
             skip_previously_downloaded_files               => $cgi->param('skip_previously_downloaded_files')    ? "1" : "0",
             shipping_budget_id                             => $cgi->param('shipping_budget_id')       || q{},
             invoice_adjustment_rules                       => $cgi->param('invoice_adjustment_rules') || '[]',
-            shipment_charge_filters                        => $cgi->param('shipment_charge_filters')  || '[]',
         };
 
         # These fields hold the bare file suffix; the order/invoice code adds

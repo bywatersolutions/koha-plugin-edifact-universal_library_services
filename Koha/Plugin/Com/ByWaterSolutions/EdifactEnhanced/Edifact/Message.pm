@@ -22,7 +22,6 @@ use warnings;
 use utf8;
 
 use Carp qw( carp );
-use JSON qw( decode_json );
 
 use Koha::Edifact::Line;
 
@@ -132,13 +131,7 @@ sub shipment_charge {
     if ( $self->message_type eq 'INVOIC' ) {
         my $amt = 0;
 
-        # Restricts which charges count towards shipping. Empty by default, so
-        # every enabled qualifier is summed just as it was before.
-        my $filters = _decode_filters( $edifact_plugin->retrieve_data('shipment_charge_filters') );
-
         foreach my $moa ( @{ $self->moa_amounts } ) {
-            next unless $self->moa_matches_filters( $moa, $filters );
-
             my $qualifier = $moa->{qualifier};
             my $elem_amt  = $moa->{amount};
 
@@ -400,17 +393,6 @@ sub _filter_regex {
     return $filter_regex{$pattern};
 }
 
-sub _decode_filters {
-    my $json = shift;
-
-    return [] unless $json;
-
-    my $filters = eval { decode_json($json) };
-    carp "Ignoring unreadable filter configuration [$json]: $@" if $@;
-
-    return ref $filters eq 'ARRAY' ? $filters : [];
-}
-
 sub _trim {
     my $value = shift;
 
@@ -464,11 +446,6 @@ Class modelling an Edifact Message for parsing
 =head2 _filter_regex
 
    compiles and caches a filter regex, returning undef for an invalid pattern
-
-=head2 _decode_filters
-
-   returns an arrayref of filters decoded from a JSON configuration string, or
-   an empty arrayref if it is missing or unreadable
 
 =head2 _trim
 

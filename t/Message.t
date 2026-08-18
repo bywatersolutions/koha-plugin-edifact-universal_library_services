@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 10;
+use Test::More tests => 9;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact;
 
@@ -320,55 +320,6 @@ subtest 'moa_matches_filters' => sub {
         ),
         'a rule fails when only one of two filters matches'
     );
-};
-
-subtest 'shipment_charge honours shipment_charge_filters' => sub {
-    plan tests => 4;
-
-    my $stub_plugin = sub {
-        my %settings = @_;
-        bless { _settings => \%settings },
-            'Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::TestStub';
-    };
-
-    # Both charges in this fixture are MOA+8, so with no filters both count
-    my $unfiltered = $charge_msg->shipment_charge(
-        $stub_plugin->( shipment_charges_moa_8 => 1 ) );
-    cmp_ok( abs( $unfiltered - 445.1 ), '<', 0.0001,
-        'no filters sums every MOA+8 ( 397.50 + 47.60 )' );
-
-    # Picking one charge by the code on its governing ALC
-    my $only_cat_proc = $charge_msg->shipment_charge(
-        $stub_plugin->(
-            shipment_charges_moa_8  => 1,
-            shipment_charge_filters =>
-                '[{"seg":"ALC","elem":"4.0","op":"eq","val":"C&P"}]',
-        )
-    );
-    cmp_ok( abs( $only_cat_proc - 397.5 ), '<', 0.0001, 'only the C&P charge counted' );
-
-    # Excluding one charge instead
-    my $everything_else = $charge_msg->shipment_charge(
-        $stub_plugin->(
-            shipment_charges_moa_8  => 1,
-            shipment_charge_filters =>
-                '[{"seg":"ALC","elem":"4.0","op":"ne","val":"C&P"}]',
-        )
-    );
-    cmp_ok( abs( $everything_else - 47.6 ), '<', 0.0001, 'the C&P charge excluded' );
-
-    # Unreadable configuration must not take the invoice run down with it
-    {
-        local $SIG{__WARN__} = sub { };
-        my $broken = $charge_msg->shipment_charge(
-            $stub_plugin->(
-                shipment_charges_moa_8  => 1,
-                shipment_charge_filters => 'not json',
-            )
-        );
-        cmp_ok( abs( $broken - 445.1 ), '<', 0.0001,
-            'unreadable filters fall back to no filtering' );
-    }
 };
 
 subtest 'line-level context, pseudo-fields and defensive matching' => sub {

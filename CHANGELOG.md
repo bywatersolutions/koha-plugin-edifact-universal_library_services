@@ -20,10 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Filters cover any segment plus the pseudo-fields `section`, `line` and
   `currency`, with `=`, `!=`, `contains` and regex operators. A rule with no
   filters behaves exactly as before.
-- A "Shipping - only these charges" option taking the same filters, so a vendor
-  who sends freight and value-added services alike as `MOA+8` can have only the
-  freight counted towards the invoice shipping cost. Empty by default, which
-  sums the same amounts as before.
 - A Shipping checkbox on each invoice adjustment rule. When ticked, the rule's
   matched amounts are added to the invoice shipping cost instead of creating an
   adjustment, so a charge a vendor buries under a shared MOA qualifier can go to
