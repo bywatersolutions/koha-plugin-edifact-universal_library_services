@@ -129,47 +129,32 @@ sub shipment_charge {
     # item level but the only one koha takes cognizance of is shipment
     # should we wrap all invoice level charges into it??
     if ( $self->message_type eq 'INVOIC' ) {
-        my $delivery = 0;
-        my $amt      = 0;
-        foreach my $s ( @{ $self->{datasegs} } ) {
-#            if ( $s->tag eq 'LIN' ) {
-#                last;
-#            }
-            if ( $edifact_plugin->retrieve_data('shipment_charges_alc_dl') ) {
-                if ( $s->tag eq 'ALC' ) {
-                    if ( $s->elem(0) eq 'C' ) {    # Its a charge
-                        if ( $s->elem( 4, 0 ) eq 'DL' ) {    # delivery charge
-                            $delivery = 1;
-                        }
-                    }
-                    next;
-                }
-            }
-            if ( $s->tag eq 'MOA' ) {
-                my $qualifier = $s->elem( 0, 0 );
-                my $elem_amt  = $s->elem( 0, 1 );
+        my $amt = 0;
 
-                # Qualifier 8 = Value Added ( barcodes, lamination, etc. )
-                $amt += $elem_amt
-                  if $qualifier == 8
-                  && $edifact_plugin->retrieve_data('shipment_charges_moa_8');
+        foreach my $moa ( @{ $self->moa_amounts } ) {
+            my $qualifier = $moa->{qualifier};
+            my $elem_amt  = $moa->{amount};
 
-                $amt += $elem_amt
-                  if $qualifier == 79
-                  && $edifact_plugin->retrieve_data('shipment_charges_moa_79');
+            # Qualifier 8 = Value Added ( barcodes, lamination, etc. )
+            $amt += $elem_amt
+              if $qualifier == 8
+              && $edifact_plugin->retrieve_data('shipment_charges_moa_8');
 
-                $amt += $elem_amt
-                  if $qualifier == 124
-                  && $edifact_plugin->retrieve_data('shipment_charges_moa_124');
+            $amt += $elem_amt
+              if $qualifier == 79
+              && $edifact_plugin->retrieve_data('shipment_charges_moa_79');
 
-                $amt += $elem_amt
-                  if $qualifier == 131
-                  && $edifact_plugin->retrieve_data('shipment_charges_moa_131');
+            $amt += $elem_amt
+              if $qualifier == 124
+              && $edifact_plugin->retrieve_data('shipment_charges_moa_124');
 
-                $amt += $elem_amt
-                  if $qualifier == 304
-                  && $edifact_plugin->retrieve_data('shipment_charges_moa_304');
-            }
+            $amt += $elem_amt
+              if $qualifier == 131
+              && $edifact_plugin->retrieve_data('shipment_charges_moa_131');
+
+            $amt += $elem_amt
+              if $qualifier == 304
+              && $edifact_plugin->retrieve_data('shipment_charges_moa_304');
         }
         return $amt;
     }
