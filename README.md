@@ -227,6 +227,8 @@ Each rule under *Invoice Adjustments from MOA Segments* matches a MOA qualifier.
 
 `!=` passes when nothing in the segment matches, so it also passes when the segment isn't there at all.
 
+Tick **Shipping** on a rule to add its matched amounts to the invoice shipping cost instead of creating an adjustment. This is another way to route a charge, like `FGT` freight, into the shipping cost: where the "Shipping - only these charges" option above works on the shipment charge MOA totals, a shipping rule works on the same qualifier-and-filter matching the adjustment rules use. The reason, note, budget and encumber fields don't apply to a shipping rule.
+
 For the four charges a vendor might send on one invoice, four rules each filtering `ALC` / `4.0` / `=` on its own code will put each charge on its own adjustment against its own fund:
 
 | MOA Qualifier | Filter | Reason | Budget ID |

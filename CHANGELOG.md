@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   who sends freight and value-added services alike as `MOA+8` can have only the
   freight counted towards the invoice shipping cost. Empty by default, which
   sums the same amounts as before.
+- A Shipping checkbox on each invoice adjustment rule. When ticked, the rule's
+  matched amounts are added to the invoice shipping cost instead of creating an
+  adjustment, so a charge a vendor buries under a shared MOA qualifier can go to
+  shipping.
 - New "Order contact and addresses" options: send an order contact name and
   email (`CTA+OC` / `COM`) and full ship-to / bill-to name and address NAD
   segments built from the basket's delivery and billing libraries, with

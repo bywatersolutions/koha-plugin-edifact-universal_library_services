@@ -94,13 +94,14 @@ $( document ).ready(function() {
         row.append('<td><select class="adj_reason">' + adj_reasons_options + '</select></td>');
         row.append($('<td>').append(textInput('adj_note', 30, rule.note)));
         row.append($('<td>').append(textInput('adj_budget_id', 8, rule.budget_id)));
+        row.append($('<td style="text-align:center;">').append($('<input>', { type: 'checkbox', 'class': 'adj_shipping', title: 'Add to invoice shipping instead of creating an invoice adjustment' }).prop('checked', !!rule.shipping)));
         row.append($('<td style="text-align:center;">').append($('<input>', { type: 'checkbox', 'class': 'adj_encumber_open' }).prop('checked', !!rule.encumber_open)));
         row.append('<td><button type="button" class="btn btn-default btn-xs remove_adj_rule_btn">Remove</button></td>');
 
         // The filters for a rule live in a row of their own directly after it
         var filters_row = $('<tr class="adj_filters_row" style="display:none;">');
         filters_row.append(
-            '<td colspan="7">'
+            '<td colspan="8">'
           + '<table class="adj_filters_table" style="width:auto; margin-left:2em;">'
           + '<thead><tr><th>Segment</th><th>Element</th><th>Operator</th><th>Value</th><th>&nbsp;</th></tr></thead>'
           + '<tbody class="adj_filters_tbody"></tbody>'
@@ -117,6 +118,13 @@ $( document ).ready(function() {
             addAdjFilter(row, filter);
         });
         updateAdjFilterCount(row);
+        syncShippingState(row);
+    }
+
+    // The budget is for the adjustment a rule creates. A shipping rule creates
+    // none, so grey the budget out while Shipping is ticked.
+    function syncShippingState(row) {
+        row.find('.adj_budget_id').prop('disabled', row.find('.adj_shipping').is(':checked'));
     }
 
     function updateAdjRulesJson() {
@@ -133,7 +141,8 @@ $( document ).ready(function() {
                 reason: rule_row.find('.adj_reason').val(),
                 note: rule_row.find('.adj_note').val(),
                 budget_id: rule_row.find('.adj_budget_id').val(),
-                encumber_open: rule_row.find('.adj_encumber_open').is(':checked') ? 1 : 0
+                encumber_open: rule_row.find('.adj_encumber_open').is(':checked') ? 1 : 0,
+                shipping: rule_row.find('.adj_shipping').is(':checked') ? 1 : 0
             };
 
             // Leave the key out entirely when there are no filters, so the
@@ -185,6 +194,10 @@ $( document ).ready(function() {
         $(this).closest('.adj_filter_row').remove();
         updateAdjFilterCount(rule_row);
         updateAdjRulesJson();
+    });
+
+    $(document).on('change', '.adj_shipping', function() {
+        syncShippingState( $(this).closest('.adj_rule_row') );
     });
 
     $('#invoice_adj_rules_table').on('change input', updateAdjRulesJson);
@@ -763,6 +776,10 @@ MOA+8:77.76'</pre>
                     nothing in the segment matches, so it also passes when the segment isn't there at all.</li>
               </ul>
 
+              <p>Tick <strong>Shipping</strong> on a rule to add its matched amounts to the invoice shipping cost
+                 instead of creating an adjustment. The reason, note, budget and encumber settings don't apply to a
+                 shipping rule.</p>
+
               <table id="invoice_adj_rules_table" style="width: 100%;">
                   <thead>
                       <tr>
@@ -771,6 +788,7 @@ MOA+8:77.76'</pre>
                           <th>Reason (ADJ_REASON)</th>
                           <th>Note</th>
                           <th>Budget ID</th>
+                          <th>Shipping</th>
                           <th>Encumber while open</th>
                           <th>&nbsp;</th>
                       </tr>

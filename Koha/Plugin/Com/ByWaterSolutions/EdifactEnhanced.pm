@@ -452,6 +452,10 @@ sub edifact_process_invoice {
                 if ( $adj_rules && ref $adj_rules eq 'ARRAY' && @$adj_rules ) {
                     my $moa_amounts = $msg->moa_amounts();
 
+                    # Amounts a rule routes to the invoice shipping cost rather
+                    # than to an adjustment, added to shipmentcost below
+                    my $shipping_from_rules = 0;
+
                     foreach my $rule (@$adj_rules) {
                         next unless defined $rule->{moa_qualifier} && $rule->{moa_qualifier} ne '';
 
@@ -460,6 +464,12 @@ sub edifact_process_invoice {
 
                             # A rule with no filters matches on the qualifier alone
                             next unless $msg->moa_matches_filters( $moa, $rule->{filters} );
+
+                            if ( $rule->{shipping} ) {
+                                $shipping_from_rules += $moa->{amount};
+                                warn "Added MOA+$moa->{qualifier} to invoice shipping: $moa->{amount}";
+                                next;
+                            }
 
                             Koha::Acquisition::Invoice::Adjustment->new(
                                 {
@@ -474,6 +484,10 @@ sub edifact_process_invoice {
 
                             warn "Created invoice adjustment for MOA+$moa->{qualifier}: $moa->{amount}";
                         }
+                    }
+
+                    if ($shipping_from_rules) {
+                        $new_invoice->shipmentcost( ( $new_invoice->shipmentcost // 0 ) + $shipping_from_rules );
                     }
                 }
             }

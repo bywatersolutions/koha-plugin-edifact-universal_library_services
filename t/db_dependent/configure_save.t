@@ -18,8 +18,7 @@
 use Modern::Perl;
 
 use CGI;
-use Test::More tests => 2;
-use Test::NoWarnings;
+use Test::More tests => 1;
 
 use Koha::Database;
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced;

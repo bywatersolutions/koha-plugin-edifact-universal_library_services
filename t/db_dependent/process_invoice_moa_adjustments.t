@@ -19,7 +19,7 @@ use Modern::Perl;
 
 use CGI;
 use JSON qw(encode_json);
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use t::lib::Mocks;
 use t::lib::TestBuilder;
@@ -417,6 +417,43 @@ subtest 'a rule with no filters still matches on the qualifier alone' => sub {
         ],
         'all four MOA+8 charges became adjustments'
     );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'a shipping rule adds to the invoice shipping cost, not an adjustment' => sub {
+    plan tests => 3;
+    $schema->storage->txn_begin;
+
+    my $san    = '5099999000082';
+    my $vendor = $builder->build_object( { class => 'Koha::Acquisition::Booksellers' } );
+
+    # The invoice starts with a zero shipping cost because none of the
+    # shipment_charges_moa_* options are enabled, so the whole shipping cost
+    # comes from this rule
+    my $plugin = _new_plugin(
+        invoice_adjustment_rules => encode_json( [
+            {   moa_qualifier => '8',
+                filters       => [ { seg => 'ALC', elem => '4.0', op => 'eq', val => 'C&P' } ],
+                shipping      => 1,
+            },
+        ] ),
+        skip_nonmatching_san_suffix => '0',
+    );
+    my $msg = _build_invoice_message( $vendor, $san, _brodart_invoic_string($san) );
+
+    {
+        local $SIG{__WARN__} = sub { };
+        eval { $plugin->edifact_process_invoice( { invoice => $msg } ); 1 }
+            or diag("edifact_process_invoice died: $@");
+    }
+
+    my $invoice = Koha::Acquisition::Invoices->search( { invoicenumber => 'INV-MOA-ALC' } )->next;
+    ok( $invoice, 'invoice created' );
+    is( sprintf( '%.2f', $invoice->shipmentcost ),
+        '397.50', 'the C&P charge went to the shipping cost' );
+    is( Koha::Acquisition::Invoice::Adjustments->search( { invoiceid => $invoice->invoiceid } )->count,
+        0, 'and no adjustment was created' );
 
     $schema->storage->txn_rollback;
 };
