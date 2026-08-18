@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 6;
+use Test::More tests => 7;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact;
 
@@ -87,18 +87,20 @@ subtest 'moa_amounts returns every MOA in order' => sub {
     # 124/1.20, 131/0.50, 304/2.00
     is( scalar @$moa, 7, 'all MOA segments collected' );
 
+    # context holds Segment objects, so compare the scalar fields only. The
+    # governing segments are covered by the context subtest below.
     is_deeply(
-        $moa,
+        [ map { { %{$_}{qw( qualifier amount section line )} } } @{$moa} ],
         [
-            { qualifier => '203', amount => '19.98' },
-            { qualifier => '203', amount => '14.50' },
-            { qualifier => '79',  amount => '34.48' },
-            { qualifier => '8',   amount => '5.00' },
-            { qualifier => '124', amount => '1.20' },
-            { qualifier => '131', amount => '0.50' },
-            { qualifier => '304', amount => '2.00' },
+            { qualifier => '203', amount => '19.98', section => 'line',    line => '1' },
+            { qualifier => '203', amount => '14.50', section => 'line',    line => '2' },
+            { qualifier => '79',  amount => '34.48', section => 'summary', line => undef },
+            { qualifier => '8',   amount => '5.00',  section => 'summary', line => undef },
+            { qualifier => '124', amount => '1.20',  section => 'summary', line => undef },
+            { qualifier => '131', amount => '0.50',  section => 'summary', line => undef },
+            { qualifier => '304', amount => '2.00',  section => 'summary', line => undef },
         ],
-        'qualifier/amount pairs preserved'
+        'qualifier/amount pairs preserved, with section and line number'
     );
 };
 
@@ -151,4 +153,73 @@ subtest 'lineitems returns one Line per LIN' => sub {
     is( scalar @$lines, 2,     'two LINs -> two Line objects' );
     isa_ok( $lines->[0], 'Koha::Edifact::Line',
         'each entry is a Koha::Edifact::Line' );
+};
+
+subtest 'moa_amounts records the segments governing each MOA' => sub {
+    plan tests => 12;
+
+    # Modelled on a real Brodart charge-only invoice: no line items, a GST TAX
+    # group, then one ALC per value-added charge each followed by its MOA+8.
+    # MOA+8 is "allowance or charge amount", so the ALC is the only thing that
+    # says which charge it is.
+    my $charges = join q{},
+        q{UNA:+.? },
+        q{'UNB+UNOA:4+1697684:31B+3010805:ZZ+260616:0252+662215},
+        q{'UNH+3755+INVOIC:D:96A:UN},
+        q{'BGM+380+B7249539+43},
+        q{'DTM+137:20260615:102},
+        q{'NAD+BY+3010805::31B},
+        q{'NAD+SU+1697684::31B},
+        q{'CUX+2:USD:4+3:USD:11},
+        q{'PAT+1++5:1:D:30},
+        q{'DTM+13:20260715:102},
+        q{'UNS+S},
+        q{'CNT+1:0},
+        q{'MOA+86:677.98},
+        q{'TAX+7+GST++++S},
+        q{'MOA+124:57.62},
+        q{'ALC+C++6++C&P},
+        q{'MOA+8:397.5},
+        q{'ALC+C++6++LFG},
+        q{'MOA+8:47.6},
+        q{'UNT+19+3755},
+        q{'UNZ+1+662215'};
+
+    my $charge_edi = Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact->new(
+        { transmission => $charges } );
+    my ($charge_msg) = @{ $charge_edi->message_array };
+    my $moa = $charge_msg->moa_amounts;
+
+    is( scalar @{$moa}, 4, 'four MOAs collected' );
+    is_deeply(
+        [ map { $_->{qualifier} } @{$moa} ],
+        [ '86', '124', '8', '8' ],
+        'MOAs collected in file order'
+    );
+    is_deeply(
+        [ map { $_->{section} } @{$moa} ],
+        [ ('summary') x 4 ],
+        'every MOA is in the summary section'
+    );
+
+    # The message total precedes both the TAX and the ALC groups
+    is( $moa->[0]{context}{TAX}, undef, 'message total has no governing TAX' );
+    is( $moa->[0]{context}{ALC}, undef, 'message total has no governing ALC' );
+
+    # MOA+124 belongs to the TAX group, and must not pick up an ALC
+    is( $moa->[1]{context}{TAX}->elem(1), 'GST', 'tax amount governed by TAX+7+GST' );
+    is( $moa->[1]{context}{ALC}, undef, 'tax amount has no governing ALC' );
+
+    # Each MOA+8 takes the charge code from the ALC immediately before it
+    is( $moa->[2]{context}{ALC}->elem( 4, 0 ), 'C&P', 'first charge is C&P' );
+    is( $moa->[3]{context}{ALC}->elem( 4, 0 ), 'LFG', 'second charge is LFG' );
+
+    # A new ALC ends the previous group, so TAX does not leak down the section
+    is( $moa->[3]{context}{TAX}, undef, 'a later ALC group has dropped the TAX' );
+
+    # CUX applies to the whole message, so it survives every group boundary
+    is( $moa->[3]{context}{CUX}->elem( 0, 1 ), 'USD', 'CUX survives to the last MOA' );
+
+    # PAT opened a group before UNS, it must not still be in scope after it
+    is( $moa->[0]{context}{PAT}, undef, 'PAT group closed at the section break' );
 };

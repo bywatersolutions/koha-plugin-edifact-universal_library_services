@@ -243,19 +243,66 @@ sub lineitems {
     }
 }
 
+# Segments that open a group of their own. Meeting a new one of these ends the
+# previous group, so a TAX group's context doesn't leak onto the MOA that
+# belongs to an ALC further down the summary section.
+my %group_openers = map { $_ => 1 } qw( ALC TAX PAT AJT );
+
+# Segments that apply to the whole message rather than to one group, so they
+# survive group and section boundaries
+my %message_scoped = map { $_ => 1 } qw( CUX );
+
 sub moa_amounts {
     my $self = shift;
 
     my @amounts;
     if ( $self->message_type eq 'INVOIC' ) {
+
+        # Where in the message we are, and the segments governing the MOA we
+        # are about to meet. MOA+8 in particular means "allowance or charge
+        # amount" and says nothing on its own about which charge it is, that
+        # comes from the ALC it follows.
+        my $section = 'header';
+        my $line;
+        my %group;
+        my %message;
+
         foreach my $s ( @{ $self->{datasegs} } ) {
-            if ( $s->tag eq 'MOA' ) {
-                push @amounts,
-                    {
-                    qualifier => $s->elem( 0, 0 ),
-                    amount    => $s->elem( 0, 1 ),
-                    };
+            my $tag = $s->tag;
+
+            if ( $tag eq 'LIN' ) {
+                $section = 'line';
+                $line    = $s->elem(0);
+                %group   = ();
+                next;
             }
+
+            if ( $tag eq 'UNS' ) {
+                $section = 'summary';
+                undef $line;
+                %group = ();
+                next;
+            }
+
+            if ( $tag ne 'MOA' ) {
+                if ( $message_scoped{$tag} ) {
+                    $message{$tag} = $s;
+                } else {
+                    %group = () if $group_openers{$tag};
+                    $group{$tag} = $s;
+                }
+                next;
+            }
+
+            push @amounts,
+                {
+                qualifier => $s->elem( 0, 0 ),
+                amount    => $s->elem( 0, 1 ),
+                currency  => $s->elem( 0, 2 ),
+                section   => $section,
+                line      => $line,
+                context   => { %message, %group },
+                };
         }
     }
     return \@amounts;
@@ -278,6 +325,13 @@ Class modelling an Edifact Message for parsing
 
    Passed an array of segments extracts message level info
    and parses lineitems as Line objects
+
+=head2 moa_amounts
+
+   $amounts = $msg->moa_amounts()
+   returns an arrayref of every MOA in an invoice message, each with its
+   qualifier, amount, currency, section ( header, line or summary ), line
+   number and a context hashref of the segments governing it keyed by tag
 
 =head1 AUTHOR
 
