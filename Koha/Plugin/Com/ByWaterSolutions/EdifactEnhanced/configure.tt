@@ -191,8 +191,36 @@ $( document ).ready(function() {
 
     $('#invoice_adj_rules_table').on('change input', updateAdjRulesJson);
 
+    // Shipment charge filters, one list for the whole vendor rather than per rule
+    function updateShipmentFiltersJson() {
+        $('#shipment_charge_filters').val(
+            JSON.stringify( filtersFrom( $('#shipment_charge_filters_tbody') ) )
+        );
+    }
+
+    try {
+        var rawShipmentFilters = $('#shipment_charge_filters').val();
+        if (rawShipmentFilters) {
+            $.each(JSON.parse(rawShipmentFilters), function(i, filter) {
+                $('#shipment_charge_filters_tbody').append( filterRow(filter, 'remove_shipment_filter_btn') );
+            });
+        }
+    } catch(e) {}
+
+    $('#add_shipment_filter_btn').on('click', function() {
+        $('#shipment_charge_filters_tbody').append( filterRow({}, 'remove_shipment_filter_btn') );
+    });
+
+    $(document).on('click', '.remove_shipment_filter_btn', function() {
+        $(this).closest('.adj_filter_row').remove();
+        updateShipmentFiltersJson();
+    });
+
+    $('#shipment_charge_filters_table').on('change input', updateShipmentFiltersJson);
+
     $('form').on('submit', function() {
         updateAdjRulesJson();
+        updateShipmentFiltersJson();
     });
 });
 
@@ -631,6 +659,28 @@ LLO:
                    <label for="shipment_charges_moa_304">Shipping - MOA+304: </label>
                    <input type="checkbox" name="shipment_charges_moa_304" id="shipment_charges_moa_304" value="1" [% IF shipment_charges_moa_304 %]checked="checked"[% END %]>
                    <span class="hint">Add MOA charges with a qualifier 304 to the shipping cost for an invoice.</span>
+                </li>
+
+                <li>
+                   <label>Shipping - only these charges: </label>
+                   <div style="display:inline-block; vertical-align:top;">
+                     <table id="shipment_charge_filters_table" style="width:auto;">
+                         <thead>
+                             <tr><th>Segment</th><th>Element</th><th>Operator</th><th>Value</th><th>&nbsp;</th></tr>
+                         </thead>
+                         <tbody id="shipment_charge_filters_tbody"></tbody>
+                     </table>
+                     <button type="button" id="add_shipment_filter_btn" class="btn btn-default btn-xs">Add filter</button>
+                   </div>
+                   <input type="hidden" name="shipment_charge_filters" id="shipment_charge_filters" value="[% shipment_charge_filters | html %]" />
+                   <span class="hint" style="display:block;">
+                     Leave this empty to add up every qualifier ticked above, which is what happens today. Add filters
+                     to narrow it down, for instance a vendor who sends both freight and value-added services as
+                     <em>MOA+8</em> but labels them on the preceding <em>ALC</em>: a filter of <em>ALC</em> /
+                     <em>4.0</em> / <em>=</em> / <em>FGT</em> keeps the freight and leaves the rest out. The fields
+                     work the same way as the invoice adjustment filters described below, and where there are several
+                     filters all of them must match.
+                   </span>
                 </li>
 
                 <li>
