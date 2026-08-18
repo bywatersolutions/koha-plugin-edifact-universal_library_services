@@ -780,7 +780,7 @@ sub configure {
             shipment_charges_moa_304                       => $cgi->param('shipment_charges_moa_304')            ? "1" : "0",
             close_invoice_on_receipt                       => $cgi->param('close_invoice_on_receipt')            ? "1" : "0",
             add_itemnote_on_receipt                        => $cgi->param('add_itemnote_on_receipt')             ? "1" : "0",
-            no_update_item_price                           => $cgi->param('no_update_item_price'),
+            no_update_item_price                           => $cgi->param('no_update_item_price') // 'update_both',
             set_nfl_on_receipt                             => $cgi->param('set_nfl_on_receipt') // q{},
             pia_limit                                      => $cgi->param('pia_limit')          // 25,
             lin_use_item_field                             => $cgi->param('lin_use_item_field')           || q{},
