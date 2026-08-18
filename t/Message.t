@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact;
 
@@ -54,6 +54,37 @@ my $invoic = join q{},
 my $edi = Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact->new(
     { transmission => $invoic } );
 my ($msg) = @{ $edi->message_array };
+
+# Modelled on a real Brodart charge-only invoice: no line items, a GST TAX
+# group, then one ALC per value-added charge each followed by its MOA+8.
+# MOA+8 is "allowance or charge amount", so the ALC is the only thing that
+# says which charge it is.
+my $charges = join q{},
+    q{UNA:+.? },
+    q{'UNB+UNOA:4+1697684:31B+3010805:ZZ+260616:0252+662215},
+    q{'UNH+3755+INVOIC:D:96A:UN},
+    q{'BGM+380+B7249539+43},
+    q{'DTM+137:20260615:102},
+    q{'NAD+BY+3010805::31B},
+    q{'NAD+SU+1697684::31B},
+    q{'CUX+2:USD:4+3:USD:11},
+    q{'PAT+1++5:1:D:30},
+    q{'DTM+13:20260715:102},
+    q{'UNS+S},
+    q{'CNT+1:0},
+    q{'MOA+86:677.98},
+    q{'TAX+7+GST++++S},
+    q{'MOA+124:57.62},
+    q{'ALC+C++6++C&P},
+    q{'MOA+8:397.5},
+    q{'ALC+C++6++LFG},
+    q{'MOA+8:47.6},
+    q{'UNT+19+3755},
+    q{'UNZ+1+662215'};
+
+my $charge_edi = Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact->new(
+    { transmission => $charges } );
+my ($charge_msg) = @{ $charge_edi->message_array };
 isa_ok( $msg,
     'Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact::Message',
     'message_array returned a Message object' );
@@ -158,36 +189,6 @@ subtest 'lineitems returns one Line per LIN' => sub {
 subtest 'moa_amounts records the segments governing each MOA' => sub {
     plan tests => 12;
 
-    # Modelled on a real Brodart charge-only invoice: no line items, a GST TAX
-    # group, then one ALC per value-added charge each followed by its MOA+8.
-    # MOA+8 is "allowance or charge amount", so the ALC is the only thing that
-    # says which charge it is.
-    my $charges = join q{},
-        q{UNA:+.? },
-        q{'UNB+UNOA:4+1697684:31B+3010805:ZZ+260616:0252+662215},
-        q{'UNH+3755+INVOIC:D:96A:UN},
-        q{'BGM+380+B7249539+43},
-        q{'DTM+137:20260615:102},
-        q{'NAD+BY+3010805::31B},
-        q{'NAD+SU+1697684::31B},
-        q{'CUX+2:USD:4+3:USD:11},
-        q{'PAT+1++5:1:D:30},
-        q{'DTM+13:20260715:102},
-        q{'UNS+S},
-        q{'CNT+1:0},
-        q{'MOA+86:677.98},
-        q{'TAX+7+GST++++S},
-        q{'MOA+124:57.62},
-        q{'ALC+C++6++C&P},
-        q{'MOA+8:397.5},
-        q{'ALC+C++6++LFG},
-        q{'MOA+8:47.6},
-        q{'UNT+19+3755},
-        q{'UNZ+1+662215'};
-
-    my $charge_edi = Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact->new(
-        { transmission => $charges } );
-    my ($charge_msg) = @{ $charge_edi->message_array };
     my $moa = $charge_msg->moa_amounts;
 
     is( scalar @{$moa}, 4, 'four MOAs collected' );
@@ -222,4 +223,101 @@ subtest 'moa_amounts records the segments governing each MOA' => sub {
 
     # PAT opened a group before UNS, it must not still be in scope after it
     is( $moa->[0]{context}{PAT}, undef, 'PAT group closed at the section break' );
+};
+
+subtest 'moa_matches_filters' => sub {
+    plan tests => 17;
+
+    my $moa      = $charge_msg->moa_amounts;
+    my $cat_proc = $moa->[2];    # MOA+8 governed by ALC ... C&P
+    my $labels   = $moa->[3];    # MOA+8 governed by ALC ... LFG
+
+    # No filters is how every rule behaved before filters existed
+    ok( $charge_msg->moa_matches_filters( $cat_proc, undef ), 'undef filters match' );
+    ok( $charge_msg->moa_matches_filters( $cat_proc, [] ),    'empty filter list matches' );
+
+    my $alc_is = sub {
+        my ( $value, %extra ) = @_;
+        return [ { seg => 'ALC', elem => '4.0', op => 'eq', val => $value, %extra } ];
+    };
+
+    ok( $charge_msg->moa_matches_filters( $cat_proc, $alc_is->('C&P') ),
+        'charge code matched on the governing ALC' );
+    ok( !$charge_msg->moa_matches_filters( $labels, $alc_is->('C&P') ),
+        'a different charge with the same qualifier is not matched' );
+    ok( $charge_msg->moa_matches_filters( $cat_proc, $alc_is->('c&p') ),
+        'matching ignores case' );
+    ok( $charge_msg->moa_matches_filters( $cat_proc, $alc_is->('  C&P  ') ),
+        'matching trims whitespace' );
+
+    # No element given, so the value is tested against the whole segment
+    ok( $charge_msg->moa_matches_filters(
+            $labels, [ { seg => 'ALC', op => 'eq', val => 'LFG' } ]
+        ),
+        'blank element tests every component of the segment'
+    );
+    ok( !$charge_msg->moa_matches_filters(
+            $labels, [ { seg => 'ALC', op => 'eq', val => 'JKT' } ]
+        ),
+        'blank element does not match an absent value'
+    );
+
+    ok( $charge_msg->moa_matches_filters(
+            $cat_proc, [ { seg => 'ALC', elem => '4.0', op => 'ne', val => 'FGT' } ]
+        ),
+        'ne passes when the code differs'
+    );
+    ok( !$charge_msg->moa_matches_filters(
+            $cat_proc, [ { seg => 'ALC', elem => '4.0', op => 'ne', val => 'C&P' } ]
+        ),
+        'ne fails when the code matches'
+    );
+
+    # ne means none of the values match, so a MOA with no such segment passes
+    ok( $charge_msg->moa_matches_filters(
+            $cat_proc, [ { seg => 'TAX', elem => '1', op => 'ne', val => 'GST' } ]
+        ),
+        'ne passes when the segment is absent entirely'
+    );
+    ok( !$charge_msg->moa_matches_filters(
+            $cat_proc, [ { seg => 'TAX', elem => '1', op => 'eq', val => 'GST' } ]
+        ),
+        'eq fails when the segment is absent entirely'
+    );
+
+    ok( $charge_msg->moa_matches_filters(
+            $cat_proc, [ { seg => 'ALC', elem => '4.0', op => 'contains', val => '&' } ]
+        ),
+        'contains matches a substring'
+    );
+
+    ok( $charge_msg->moa_matches_filters(
+            $cat_proc, [ { seg => 'ALC', elem => '4.0', op => 'regex', val => '^(C&P|JKT)$' } ]
+        ),
+        'regex matches one of an alternation'
+    );
+    ok( !$charge_msg->moa_matches_filters(
+            $labels, [ { seg => 'ALC', elem => '4.0', op => 'regex', val => '^(C&P|JKT)$' } ]
+        ),
+        'regex rejects a code outside the alternation'
+    );
+
+    {
+        local $SIG{__WARN__} = sub { };
+        ok( !$charge_msg->moa_matches_filters(
+                $cat_proc, [ { seg => 'ALC', op => 'regex', val => '[' } ]
+            ),
+            'an invalid regex matches nothing rather than dying'
+        );
+    }
+
+    # Every filter has to match
+    ok( !$charge_msg->moa_matches_filters(
+            $cat_proc,
+            [   { seg => 'ALC',     elem => '4.0', op => 'eq', val => 'C&P' },
+                { seg => 'section', op => 'eq',    val => 'line' },
+            ]
+        ),
+        'a rule fails when only one of two filters matches'
+    );
 };

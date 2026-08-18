@@ -21,6 +21,8 @@ use strict;
 use warnings;
 use utf8;
 
+use Carp qw( carp );
+
 use Koha::Edifact::Line;
 
 sub new {
@@ -308,6 +310,108 @@ sub moa_amounts {
     return \@amounts;
 }
 
+# Compiled filter regexes, keyed by pattern. These come from plugin config and
+# are applied to every MOA in every invoice, so compile each one only once.
+my %filter_regex;
+
+sub moa_matches_filters {
+    my ( $self, $moa, $filters ) = @_;
+
+    # No filters means the rule matches on its MOA qualifier alone, which is
+    # how every rule behaved before filters existed
+    return 1 unless $filters && ref $filters eq 'ARRAY' && @{$filters};
+
+    foreach my $filter ( @{$filters} ) {
+        return 0 unless _filter_matches( $moa, $filter );
+    }
+
+    return 1;
+}
+
+sub _filter_matches {
+    my ( $moa, $filter ) = @_;
+
+    my $seg = _trim( $filter->{seg} );
+
+    # A filter with no segment was never filled in, ignore it rather than
+    # matching nothing
+    return 1 if $seg eq q{};
+
+    my $op  = $filter->{op} || 'eq';
+    my $val = _trim( $filter->{val} );
+    my @candidates = map { _trim($_) } @{ _filter_candidates( $moa, $seg, $filter->{elem} ) };
+
+    if ( $op eq 'ne' ) {
+
+        # None of the values may match, so a MOA with no such segment passes
+        return ( grep { lc $_ eq lc $val } @candidates ) ? 0 : 1;
+    }
+
+    if ( $op eq 'contains' ) {
+        return ( grep { index( lc $_, lc $val ) >= 0 } @candidates ) ? 1 : 0;
+    }
+
+    if ( $op eq 'regex' ) {
+        my $re = _filter_regex($val);
+        return 0 unless $re;
+        return ( grep { $_ =~ $re } @candidates ) ? 1 : 0;
+    }
+
+    return ( grep { lc $_ eq lc $val } @candidates ) ? 1 : 0;
+}
+
+sub _filter_candidates {
+    my ( $moa, $seg, $elem ) = @_;
+
+    # Pseudo-fields are lowercase so they can't collide with a segment tag
+    my $pseudo = lc $seg;
+    return [ $moa->{section} ] if $pseudo eq 'section';
+    return [ $moa->{currency} ] if $pseudo eq 'currency';
+    return defined $moa->{line} ? [ $moa->{line} ] : [] if $pseudo eq 'line';
+
+    my $segment = $moa->{context}->{ uc $seg };
+    return [] unless $segment;
+
+    $elem = _trim($elem);
+
+    # No element given, so test the value against the whole segment. We can't
+    # rely on a vendor putting a code where the standard says it goes.
+    return $segment->all_values if $elem eq q{};
+
+    my ( $element_number, $component_number ) = split /[.]/, $elem, 2;
+    my $value =
+        defined $component_number
+        ? $segment->elem( $element_number, $component_number )
+        : $segment->elem($element_number);
+
+    # elem returns an arrayref for a composite element, and for one that parsed
+    # as empty
+    return ref $value eq 'ARRAY' ? [ @{$value} ] : [$value];
+}
+
+sub _filter_regex {
+    my $pattern = shift;
+
+    unless ( exists $filter_regex{$pattern} ) {
+        my $re = eval { qr/$pattern/i };
+        carp "Ignoring invalid MOA filter regex [$pattern]: $@" unless $re;
+        $filter_regex{$pattern} = $re;
+    }
+
+    return $filter_regex{$pattern};
+}
+
+sub _trim {
+    my $value = shift;
+
+    return q{} unless defined $value;
+    return q{} if ref $value;
+
+    $value =~ s/^\s+//;
+    $value =~ s/\s+$//;
+    return $value;
+}
+
 1;
 __END__
 
@@ -332,6 +436,28 @@ Class modelling an Edifact Message for parsing
    returns an arrayref of every MOA in an invoice message, each with its
    qualifier, amount, currency, section ( header, line or summary ), line
    number and a context hashref of the segments governing it keyed by tag
+
+=head2 moa_matches_filters
+
+   next unless $msg->moa_matches_filters( $moa, $filters )
+   returns true if the MOA satisfies every filter in the arrayref. An empty or
+   missing filter list always matches.
+
+=head2 _filter_matches
+
+   returns true if one filter matches the MOA
+
+=head2 _filter_candidates
+
+   returns an arrayref of the values a filter should be tested against
+
+=head2 _filter_regex
+
+   compiles and caches a filter regex, returning undef for an invalid pattern
+
+=head2 _trim
+
+   returns the passed value with leading and trailing whitespace removed
 
 =head1 AUTHOR
 
