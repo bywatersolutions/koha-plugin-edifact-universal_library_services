@@ -75,6 +75,25 @@ sub element {
     return $self->elem(@params);
 }
 
+# Return every component of every element as a flat list. Matching a value
+# against a whole segment needs this because we can't rely on a vendor putting
+# a code in the element the standard specifies for it.
+sub all_values {
+    my $self = shift;
+
+    my @values;
+    foreach my $e ( @{ $self->{elem_arr} } ) {
+        foreach my $c ( ref $e eq 'ARRAY' ? @{$e} : $e ) {
+            next unless defined $c;
+            my $value = $c;
+            $value =~ s/[^[:print:]]+//g;
+            push @values, $value;
+        }
+    }
+
+    return \@values;
+}
+
 sub as_string {
     my $self = shift;
 
@@ -168,6 +187,11 @@ Koha::Edifact::Segment - Class foe Edifact Segments
 =head2 element
 
       syntactic sugar this wraps the rlem method in a fuller name
+
+=head2 all_values
+
+      $values = $s->all_values()
+      returns an arrayref holding every component of every element
 
 =head2 as_string
 

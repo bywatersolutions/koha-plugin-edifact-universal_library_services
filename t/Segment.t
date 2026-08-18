@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact::Segment;
 
@@ -78,4 +78,26 @@ subtest 'out-of-range elements return empty string' => sub {
     my $seg = $class->new( { seg_string => "BGM+380" } );
     is( $seg->elem(5),     q{}, 'past-end elem returns empty string' );
     is( $seg->elem( 5, 0 ), q{}, 'past-end elem with component returns empty string' );
+};
+
+subtest 'all_values flattens every element and component' => sub {
+    plan tests => 4;
+
+    # ALC+C++6++C&P is how Brodart labels a value-added charge, so the code
+    # sits in the fifth element. _components parses an empty element into an
+    # empty arrayref, so empty elements contribute nothing here
+    my $alc = $class->new( { seg_string => "ALC+C++6++C&P" } );
+    is_deeply( $alc->all_values, [ 'C', '6', 'C&P' ],
+        'populated elements flattened in order, empty elements skipped' );
+
+    my $moa = $class->new( { seg_string => "MOA+203:49.95" } );
+    is_deeply( $moa->all_values, [ '203', '49.95' ],
+        'composite element expanded into its components' );
+
+    # elem() turns a legitimate zero into an empty string, all_values must not
+    my $qty = $class->new( { seg_string => "QTY+47:0" } );
+    is_deeply( $qty->all_values, [ '47', '0' ], 'a zero component is preserved' );
+
+    my $empty = $class->new( { seg_string => "UNS" } );
+    is_deeply( $empty->all_values, [], 'segment with no elements returns empty list' );
 };
