@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 6;
+use Test::More tests => 7;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact::Segment;
 
@@ -100,4 +100,16 @@ subtest 'all_values flattens every element and component' => sub {
 
     my $empty = $class->new( { seg_string => "UNS" } );
     is_deeply( $empty->all_values, [], 'segment with no elements returns empty list' );
+};
+
+subtest 'value_at lets a legitimate zero survive' => sub {
+    plan tests => 4;
+
+    my $qty = $class->new( { seg_string => "QTY+47:0" } );
+    is( $qty->elem( 0, 1 ), q{}, 'elem coerces a zero component to empty string' );
+    is( $qty->value_at( 0, 1 ), '0', 'value_at preserves it' );
+
+    my $moa = $class->new( { seg_string => "MOA+203:49.95" } );
+    is( $moa->value_at( 0, 0 ), '203', 'component addressing matches elem' );
+    is( $moa->value_at( 5, 0 ), q{}, 'out of range still returns empty string' );
 };

@@ -75,6 +75,35 @@ sub element {
     return $self->elem(@params);
 }
 
+# Like elem, but a legitimate zero survives. elem coerces every false value,
+# including 0, to an empty string, and a filter comparing against 0 needs the
+# difference.
+sub value_at {
+    my ( $self, $element_number, $component_number ) = @_;
+
+    my $value;
+
+    if ( $element_number < @{ $self->{elem_arr} } ) {
+        my $e = $self->{elem_arr}->[$element_number];
+        if ( defined $component_number ) {
+            if ( ref $e eq 'ARRAY' ) {
+                $value = $e->[$component_number] if $component_number < @{$e};
+            }
+            elsif ( $component_number == 0 ) {
+                $value = $e;
+            }
+        }
+        else {
+            $value = $e;
+        }
+    }
+
+    $value = q{} unless defined $value;
+    return $value if ref $value;
+    $value =~ s/[^[:print:]]+//g;
+    return $value;
+}
+
 # Return every component of every element as a flat list. Matching a value
 # against a whole segment needs this because we can't rely on a vendor putting
 # a code in the element the standard specifies for it.
@@ -187,6 +216,12 @@ Koha::Edifact::Segment - Class foe Edifact Segments
 =head2 element
 
       syntactic sugar this wraps the rlem method in a fuller name
+
+=head2 value_at
+
+      $data = $s->value_at($element_number, $component_number)
+      like elem, but a legitimate zero survives instead of being coerced
+      to an empty string
 
 =head2 all_values
 

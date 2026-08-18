@@ -323,6 +323,9 @@ sub moa_matches_filters {
 sub _filter_matches {
     my ( $moa, $filter ) = @_;
 
+    # Hand-edited configuration can hold anything, ignore what isn't a filter
+    return 1 unless ref $filter eq 'HASH';
+
     my $seg = _trim( $filter->{seg} );
 
     # A filter with no segment was never filled in, ignore it rather than
@@ -370,14 +373,15 @@ sub _filter_candidates {
     # rely on a vendor putting a code where the standard says it goes.
     return $segment->all_values if $elem eq q{};
 
-    my ( $element_number, $component_number ) = split /[.]/, $elem, 2;
-    my $value =
-        defined $component_number
-        ? $segment->elem( $element_number, $component_number )
-        : $segment->elem($element_number);
+    # Anything but N or N.C would read the wrong element while warning on
+    # every MOA of every invoice, treat it as matching nothing
+    return [] unless $elem =~ /^\d+(?:[.]\d+)?$/;
 
-    # elem returns an arrayref for a composite element, and for one that parsed
-    # as empty
+    my ( $element_number, $component_number ) = split /[.]/, $elem, 2;
+    my $value = $segment->value_at( $element_number, $component_number );
+
+    # value_at returns an arrayref for a composite element addressed without a
+    # component index
     return ref $value eq 'ARRAY' ? [ @{$value} ] : [$value];
 }
 
@@ -385,10 +389,13 @@ sub _filter_regex {
     my $pattern = shift;
 
     unless ( exists $filter_regex{$pattern} ) {
-        my $re = eval { qr/$pattern/i };
-        carp "Ignoring invalid MOA filter regex [$pattern]: $@" unless $re;
-        $filter_regex{$pattern} = $re;
+        $filter_regex{$pattern} = eval { qr/$pattern/i };
     }
+
+    # Report every use, not just the first. A cron run chews through many
+    # invoices and the log should say why each one skipped its charges.
+    carp "Ignoring invalid MOA filter regex [$pattern]"
+        unless $filter_regex{$pattern};
 
     return $filter_regex{$pattern};
 }

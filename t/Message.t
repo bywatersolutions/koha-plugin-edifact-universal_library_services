@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 9;
+use Test::More tests => 10;
 
 use Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact;
 
@@ -331,7 +331,7 @@ subtest 'shipment_charge honours shipment_charge_filters' => sub {
             'Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::TestStub';
     };
 
-    # All four Brodart charges are MOA+8, so with no filters they all count
+    # Both charges in this fixture are MOA+8, so with no filters both count
     my $unfiltered = $charge_msg->shipment_charge(
         $stub_plugin->( shipment_charges_moa_8 => 1 ) );
     cmp_ok( abs( $unfiltered - 445.1 ), '<', 0.0001,
@@ -369,4 +369,79 @@ subtest 'shipment_charge honours shipment_charge_filters' => sub {
         cmp_ok( abs( $broken - 445.1 ), '<', 0.0001,
             'unreadable filters fall back to no filtering' );
     }
+};
+
+subtest 'line-level context, pseudo-fields and defensive matching' => sub {
+    plan tests => 13;
+
+    # A LIN group carrying its own ALC charge, with a currency on the MOA and
+    # a zero discount percentage to prove a zero can be matched
+    my $lines = join q{},
+        q{UNA:+.? },
+        q{'UNB+UNOC:3+5013546027173+5013546098818+230101:0000+0000000001},
+        q{'UNH+00001+INVOIC:D:96A:UN},
+        q{'BGM+380+INV-LINES+9},
+        q{'DTM+137:20240115:102},
+        q{'NAD+BY+12345::9},
+        q{'NAD+SU+5013546027173::9},
+        q{'LIN+1},
+        q{'QTY+47:2},
+        q{'ALC+C++6++C&P},
+        q{'PCD+3:0},
+        q{'MOA+8:12.5:USD},
+        q{'LIN+2},
+        q{'MOA+203:19.98},
+        q{'UNS+S},
+        q{'MOA+86:100.00},
+        q{'UNT+16+00001},
+        q{'UNZ+1+0000000001'};
+
+    my $line_edi = Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact->new(
+        { transmission => $lines } );
+    my ($line_msg) = @{ $line_edi->message_array };
+    my $moa = $line_msg->moa_amounts;
+
+    my $charge = $moa->[0];
+    is( $charge->{section},  'line', 'MOA inside a LIN group is line section' );
+    is( $charge->{line},     '1',    'line number recorded' );
+    is( $charge->{currency}, 'USD',  'currency recorded from the third component' );
+    is( $charge->{context}{ALC}->elem( 4, 0 ), 'C&P', 'line-level ALC governs its MOA' );
+
+    ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'section', op => 'eq', val => 'line' } ] ),
+        'section filter matches a line MOA' );
+    ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'line', op => 'eq', val => '1' } ] ),
+        'line filter matches its line number' );
+    ok( !$line_msg->moa_matches_filters( $moa->[1], [ { seg => 'line', op => 'eq', val => '1' } ] ),
+        'line filter rejects a different line' );
+    ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'currency', op => 'eq', val => 'usd' } ] ),
+        'currency filter matches ignoring case' );
+
+    # PCD+3:0 puts a legitimate zero in component 0.1
+    ok( $line_msg->moa_matches_filters( $charge, [ { seg => 'PCD', elem => '0.1', op => 'eq', val => '0' } ] ),
+        'an element-addressed zero can be matched' );
+
+    # Nonsense from hand-edited configuration must not warn or die
+    ok( !$line_msg->moa_matches_filters( $charge, [ { seg => 'ALC', elem => 'abc', op => 'eq', val => 'C&P' } ] ),
+        'a non-numeric element matches nothing' );
+    ok( $line_msg->moa_matches_filters( $charge, [ 'FGT' ] ),
+        'a filter that is not a hashref is ignored' );
+
+    # The second LIN clears the first group
+    is( $moa->[1]{context}{ALC}, undef, 'a new LIN drops the previous ALC' );
+
+    # Nothing but INVOIC has MOA handling
+    my $quote = join q{},
+        q{UNA:+.? },
+        q{'UNB+UNOC:3+5013546027173+5013546098818+230101:0000+0000000002},
+        q{'UNH+00002+QUOTES:D:96A:UN},
+        q{'BGM+310+Q1+9},
+        q{'DTM+137:20240115:102},
+        q{'MOA+203:19.98},
+        q{'UNT+5+00002},
+        q{'UNZ+1+0000000002'};
+    my ($quote_msg) = @{
+        Koha::Plugin::Com::ByWaterSolutions::EdifactEnhanced::Edifact->new(
+            { transmission => $quote } )->message_array
+    };
+    is_deeply( $quote_msg->moa_amounts, [], 'moa_amounts is empty for a non-invoice' );
 };
