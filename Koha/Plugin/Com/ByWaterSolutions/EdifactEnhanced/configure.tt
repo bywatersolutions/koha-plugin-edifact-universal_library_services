@@ -22,36 +22,34 @@ $( document ).ready(function() {
     adj_reasons_options += '<option value="[% av.authorised_value | html %]">[% av.lib | html %]</option>';
     [% END %]
 
-    function escapeHtml(text) {
-        if (!text) return '';
-        return $('<span>').text(text).html();
-    }
-
-    // escapeHtml returns '' for anything falsy, so a legitimate 0 would be lost.
-    // Filter values can be 0, use this for them instead.
-    function escapeValue(value) {
-        if (value === undefined || value === null) return '';
-        return $('<span>').text(value).html();
+    // Saved values go into the DOM through .val() and .prop() only, never by
+    // concatenating them into HTML strings. Escaping through .text().html()
+    // isn't enough there: it leaves double quotes alone, so a stored value
+    // could break out of a value="..." attribute and inject markup.
+    function textInput(css_class, size, value) {
+        return $('<input>', { type: 'text', 'class': css_class, size: size })
+            .val(value === undefined || value === null ? '' : value);
     }
 
     var adj_filter_ops = { 'eq': '=', 'ne': '!=', 'contains': 'contains', 'regex': 'matches regex' };
 
-    function adjFilterOpOptions(selected) {
-        var options = '';
+    function adjFilterOpSelect(selected) {
+        var select = $('<select>', { 'class': 'adj_filter_op' });
         $.each(adj_filter_ops, function(op, label) {
-            options += '<option value="' + op + '"' + (op === selected ? ' selected="selected"' : '') + '>' + label + '</option>';
+            select.append($('<option>', { value: op, text: label }));
         });
-        return options;
+        select.val(selected);
+        return select;
     }
 
     function filterRow(filter, remove_class) {
         filter = filter || {};
         var row = $('<tr class="adj_filter_row">');
-        row.append('<td><input type="text" class="adj_filter_seg" size="8" value="' + escapeValue(filter.seg) + '" /></td>');
-        row.append('<td><input type="text" class="adj_filter_elem" size="6" value="' + escapeValue(filter.elem) + '" /></td>');
-        row.append('<td><select class="adj_filter_op">' + adjFilterOpOptions(filter.op || 'eq') + '</select></td>');
-        row.append('<td><input type="text" class="adj_filter_val" size="20" value="' + escapeValue(filter.val) + '" /></td>');
-        row.append('<td><button type="button" class="btn btn-default btn-xs ' + remove_class + '">Remove</button></td>');
+        row.append($('<td>').append(textInput('adj_filter_seg', 8, filter.seg)));
+        row.append($('<td>').append(textInput('adj_filter_elem', 6, filter.elem)));
+        row.append($('<td>').append(adjFilterOpSelect(filter.op || 'eq')));
+        row.append($('<td>').append(textInput('adj_filter_val', 20, filter.val)));
+        row.append($('<td>').append($('<button>', { type: 'button', 'class': 'btn btn-default btn-xs ' + remove_class, text: 'Remove' })));
         return row;
     }
 
@@ -91,12 +89,12 @@ $( document ).ready(function() {
     function addAdjRule(rule) {
         rule = rule || {};
         var row = $('<tr class="adj_rule_row">');
-        row.append('<td><input type="text" class="adj_moa_qualifier" size="6" value="' + escapeHtml(rule.moa_qualifier) + '" /></td>');
+        row.append($('<td>').append(textInput('adj_moa_qualifier', 6, rule.moa_qualifier)));
         row.append('<td><button type="button" class="btn btn-default btn-xs edit_adj_filters_btn">0 filters</button></td>');
         row.append('<td><select class="adj_reason">' + adj_reasons_options + '</select></td>');
-        row.append('<td><input type="text" class="adj_note" size="30" value="' + escapeHtml(rule.note) + '" /></td>');
-        row.append('<td><input type="text" class="adj_budget_id" size="8" value="' + escapeHtml(rule.budget_id) + '" /></td>');
-        row.append('<td style="text-align:center;"><input type="checkbox" class="adj_encumber_open" ' + (rule.encumber_open ? 'checked="checked"' : '') + ' /></td>');
+        row.append($('<td>').append(textInput('adj_note', 30, rule.note)));
+        row.append($('<td>').append(textInput('adj_budget_id', 8, rule.budget_id)));
+        row.append($('<td style="text-align:center;">').append($('<input>', { type: 'checkbox', 'class': 'adj_encumber_open' }).prop('checked', !!rule.encumber_open)));
         row.append('<td><button type="button" class="btn btn-default btn-xs remove_adj_rule_btn">Remove</button></td>');
 
         // The filters for a rule live in a row of their own directly after it
