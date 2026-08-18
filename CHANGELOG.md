@@ -14,10 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Invoice adjustment rules can now filter on the segments governing a MOA, not
+  just its qualifier. A rule can say "MOA+8 where the governing ALC has C&P in
+  element 4", which separates charges a vendor sends under a single qualifier.
+  Filters cover any segment plus the pseudo-fields `section`, `line` and
+  `currency`, with `=`, `!=`, `contains` and regex operators. A rule with no
+  filters behaves exactly as before.
+- A "Shipping - only these charges" option taking the same filters, so a vendor
+  who sends freight and value-added services alike as `MOA+8` can have only the
+  freight counted towards the invoice shipping cost. Empty by default, which
+  sums the same amounts as before.
 - New "Order contact and addresses" options: send an order contact name and
   email (`CTA+OC` / `COM`) and full ship-to / bill-to name and address NAD
   segments built from the basket's delivery and billing libraries, with
   selectable party qualifiers (DP/ST and IV/BT).
+
+### Removed
+
+- The `shipment_charges_alc_dl` handling. It noted an `ALC+C` carrying a `DL`
+  delivery charge, set a flag, and never looked at the flag again. Its
+  configuration checkbox was already commented out as having no effect.
 
 ## [4.3.x] - 2026-06
 

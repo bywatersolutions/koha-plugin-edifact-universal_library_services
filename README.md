@@ -200,6 +200,43 @@ The use of the last order line is arbitrary. The feature basically assumes that 
 When an invoice is received, set it to closed automatically.
 This option is mildly dangerous but highly convenient. It assumes a vendor will always get your shipments to you correctly.
 
+#### Shipping - only these charges
+
+By default the shipping cost for an invoice is the total of every `MOA` whose qualifier is ticked under the `Shipping - MOA+N` options above. That works while a vendor uses a different qualifier for each kind of charge, and stops working when they don't.
+
+Some vendors send freight and every value-added service alike as `MOA+8`, and only the preceding `ALC` says which charge is which:
+
+```
+ALC+C++6++FGT'
+MOA+8:34.10'
+ALC+C++6++C&P'
+MOA+8:397.50'
+```
+
+Leave this setting empty and nothing changes: every ticked qualifier is added up as before. Add a filter of `ALC` / `4.0` / `=` / `FGT` and only the freight counts towards shipping. The fields work exactly like the invoice adjustment filters below.
+
+### Invoice adjustment filters
+
+Each rule under *Invoice Adjustments from MOA Segments* matches a MOA qualifier. Because a qualifier alone often can't tell two charges apart, a rule can also carry filters tested against the segments governing the MOA. Click a rule's **Filters** button to edit them. A rule with no filters matches on the qualifier alone, and where a rule has several filters all of them must match.
+
+| Field | Meaning |
+| --- | --- |
+| Segment | A segment tag such as `ALC`, `TAX`, `PAT`, `AJT`, `FTX` or `RFF`, or one of the pseudo-fields `section` (`header`, `line` or `summary`), `line` or `currency`. |
+| Element | A position within that segment, such as `4` or `4.0`. Leave it empty to test the value against every part of the segment, which is what you want when a vendor doesn't put the code where the standard says it goes. |
+| Operator | `=`, `!=`, `contains` or `matches regex`. |
+| Value | Compared ignoring case and surrounding spaces. |
+
+`!=` passes when nothing in the segment matches, so it also passes when the segment isn't there at all.
+
+For the four charges a vendor might send on one invoice, four rules each filtering `ALC` / `4.0` / `=` on its own code will put each charge on its own adjustment against its own fund:
+
+| MOA Qualifier | Filter | Reason | Budget ID |
+| --- | --- | --- | --- |
+| 8 | `ALC` `4.0` `=` `C&P` | Cataloging | 12 |
+| 8 | `ALC` `4.0` `=` `JKT` | Supplies | 14 |
+| 8 | `ALC` `4.0` `=` `RFI` | Supplies | 14 |
+| 8 | `ALC` `4.0` `=` `LFG` | Supplies | 14 |
+
 ## Tips and tricks
 
 * Add `NO_GIR:{True}` to a Library EAN description to prevent that account from sending enriched GIR data ( useful for B&T unprocessed accounts )
