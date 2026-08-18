@@ -53,6 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The dependency on `Business::Barcode::EAN13`. The plugin used one function
+  from it, at one call site, to check EAN-13 check digits when hunting for an
+  EAN hiding in the ISBN field. The fifteen lines it needs now live in
+  `Edifact::Order`, so nothing has to be installed with cpanm before the
+  plugin works and CI no longer needs its extra install step.
 - The `shipment_charges_alc_dl` handling. It noted an `ALC+C` carrying a `DL`
   delivery charge, set a flag, and never looked at the flag again. Its
   configuration checkbox was already commented out as having no effect.

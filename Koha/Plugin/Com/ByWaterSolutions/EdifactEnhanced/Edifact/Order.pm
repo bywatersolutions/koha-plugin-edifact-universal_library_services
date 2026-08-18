@@ -26,7 +26,6 @@ use DateTime;
 use Readonly;
 use YAML qw( Load );
 use Business::ISBN;
-use Business::Barcode::EAN13 qw( valid_barcode );
 use Clone 'clone';
 use Koha::Database;
 use C4::Budgets qw( GetBudget );
@@ -546,7 +545,7 @@ sub order_line {
         push( @isbns, $isbn );
     }
 
-    my @eans = grep( valid_barcode($_), @isbns );
+    my @eans = grep( _valid_ean13($_), @isbns );
 
     if ( $line_item_field_value ) {
         $id_string = $line_item_field_value;
@@ -1149,6 +1148,27 @@ sub _get_product_id {
     my $id = $record->subfield('028', 'a');
 
     return $id;
+}
+
+sub _valid_ean13 {
+    my ($barcode) = @_;
+
+    return 0 unless defined $barcode && $barcode =~ /^\d{13}$/;
+
+    # EAN-13 check digit: weight the first twelve digits 1,3,1,3... from the
+    # left, sum them, and the check digit is whatever brings the sum up to a
+    # multiple of ten
+    my @digits = split //, $barcode;
+    my $check  = pop @digits;
+
+    my $sum    = 0;
+    my $weight = 1;
+    for my $digit (@digits) {
+        $sum += $digit * $weight;
+        $weight = 4 - $weight;
+    }
+
+    return ( 10 - $sum % 10 ) % 10 == $check ? 1 : 0;
 }
 
 1;
