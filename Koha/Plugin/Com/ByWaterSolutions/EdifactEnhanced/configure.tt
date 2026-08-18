@@ -27,34 +27,124 @@ $( document ).ready(function() {
         return $('<span>').text(text).html();
     }
 
+    // escapeHtml returns '' for anything falsy, so a legitimate 0 would be lost.
+    // Filter values can be 0, use this for them instead.
+    function escapeValue(value) {
+        if (value === undefined || value === null) return '';
+        return $('<span>').text(value).html();
+    }
+
+    var adj_filter_ops = { 'eq': '=', 'ne': '!=', 'contains': 'contains', 'regex': 'matches regex' };
+
+    function adjFilterOpOptions(selected) {
+        var options = '';
+        $.each(adj_filter_ops, function(op, label) {
+            options += '<option value="' + op + '"' + (op === selected ? ' selected="selected"' : '') + '>' + label + '</option>';
+        });
+        return options;
+    }
+
+    function filterRow(filter, remove_class) {
+        filter = filter || {};
+        var row = $('<tr class="adj_filter_row">');
+        row.append('<td><input type="text" class="adj_filter_seg" size="8" value="' + escapeValue(filter.seg) + '" /></td>');
+        row.append('<td><input type="text" class="adj_filter_elem" size="6" value="' + escapeValue(filter.elem) + '" /></td>');
+        row.append('<td><select class="adj_filter_op">' + adjFilterOpOptions(filter.op || 'eq') + '</select></td>');
+        row.append('<td><input type="text" class="adj_filter_val" size="20" value="' + escapeValue(filter.val) + '" /></td>');
+        row.append('<td><button type="button" class="btn btn-default btn-xs ' + remove_class + '">Remove</button></td>');
+        return row;
+    }
+
+    // Read the filter rows out of a tbody. A half-filled row would silently
+    // filter everything out, so skip any row missing a segment or a value.
+    function filtersFrom(tbody) {
+        var filters = [];
+        tbody.find('.adj_filter_row').each(function() {
+            var seg = $(this).find('.adj_filter_seg').val();
+            var val = $(this).find('.adj_filter_val').val();
+            if (seg === '' || val === '') return;
+
+            filters.push({
+                seg: seg,
+                elem: $(this).find('.adj_filter_elem').val(),
+                op: $(this).find('.adj_filter_op').val(),
+                val: val
+            });
+        });
+        return filters;
+    }
+
+    function addAdjFilter(rule_row, filter) {
+        rule_row.next('.adj_filters_row').find('.adj_filters_tbody')
+            .append( filterRow(filter, 'remove_adj_filter_btn') );
+    }
+
+    function adjFilterCount(rule_row) {
+        return rule_row.next('.adj_filters_row').find('.adj_filter_row').length;
+    }
+
+    function updateAdjFilterCount(rule_row) {
+        var count = adjFilterCount(rule_row);
+        rule_row.find('.edit_adj_filters_btn').text(count === 1 ? '1 filter' : count + ' filters');
+    }
+
     function addAdjRule(rule) {
         rule = rule || {};
-        var row = $('<tr>');
+        var row = $('<tr class="adj_rule_row">');
         row.append('<td><input type="text" class="adj_moa_qualifier" size="6" value="' + escapeHtml(rule.moa_qualifier) + '" /></td>');
+        row.append('<td><button type="button" class="btn btn-default btn-xs edit_adj_filters_btn">0 filters</button></td>');
         row.append('<td><select class="adj_reason">' + adj_reasons_options + '</select></td>');
         row.append('<td><input type="text" class="adj_note" size="30" value="' + escapeHtml(rule.note) + '" /></td>');
         row.append('<td><input type="text" class="adj_budget_id" size="8" value="' + escapeHtml(rule.budget_id) + '" /></td>');
         row.append('<td style="text-align:center;"><input type="checkbox" class="adj_encumber_open" ' + (rule.encumber_open ? 'checked="checked"' : '') + ' /></td>');
         row.append('<td><button type="button" class="btn btn-default btn-xs remove_adj_rule_btn">Remove</button></td>');
-        $('#invoice_adj_rules_tbody').append(row);
+
+        // The filters for a rule live in a row of their own directly after it
+        var filters_row = $('<tr class="adj_filters_row" style="display:none;">');
+        filters_row.append(
+            '<td colspan="7">'
+          + '<table class="adj_filters_table" style="width:auto; margin-left:2em;">'
+          + '<thead><tr><th>Segment</th><th>Element</th><th>Operator</th><th>Value</th><th>&nbsp;</th></tr></thead>'
+          + '<tbody class="adj_filters_tbody"></tbody>'
+          + '</table>'
+          + '<button type="button" class="btn btn-default btn-xs add_adj_filter_btn" style="margin-left:2em;">Add filter</button>'
+          + '</td>'
+        );
+
+        $('#invoice_adj_rules_tbody').append(row).append(filters_row);
         if (rule.reason) {
             row.find('.adj_reason').val(rule.reason);
         }
+        $.each(rule.filters || [], function(i, filter) {
+            addAdjFilter(row, filter);
+        });
+        updateAdjFilterCount(row);
     }
 
     function updateAdjRulesJson() {
         var rules = [];
-        $('#invoice_adj_rules_tbody tr').each(function() {
-            var qualifier = $(this).find('.adj_moa_qualifier').val();
-            if (qualifier !== '') {
-                rules.push({
-                    moa_qualifier: qualifier,
-                    reason: $(this).find('.adj_reason').val(),
-                    note: $(this).find('.adj_note').val(),
-                    budget_id: $(this).find('.adj_budget_id').val(),
-                    encumber_open: $(this).find('.adj_encumber_open').is(':checked') ? 1 : 0
-                });
+        $('#invoice_adj_rules_tbody tr.adj_rule_row').each(function() {
+            var rule_row = $(this);
+            var qualifier = rule_row.find('.adj_moa_qualifier').val();
+            if (qualifier === '') return;
+
+            var filters = filtersFrom( rule_row.next('.adj_filters_row') );
+
+            var rule = {
+                moa_qualifier: qualifier,
+                reason: rule_row.find('.adj_reason').val(),
+                note: rule_row.find('.adj_note').val(),
+                budget_id: rule_row.find('.adj_budget_id').val(),
+                encumber_open: rule_row.find('.adj_encumber_open').is(':checked') ? 1 : 0
+            };
+
+            // Leave the key out entirely when there are no filters, so the
+            // saved rule looks exactly like one saved before filters existed
+            if (filters.length) {
+                rule.filters = filters;
             }
+
+            rules.push(rule);
         });
         $('#invoice_adjustment_rules').val(JSON.stringify(rules));
     }
@@ -75,7 +165,27 @@ $( document ).ready(function() {
     });
 
     $(document).on('click', '.remove_adj_rule_btn', function() {
-        $(this).closest('tr').remove();
+        var rule_row = $(this).closest('tr');
+        rule_row.next('.adj_filters_row').remove();
+        rule_row.remove();
+        updateAdjRulesJson();
+    });
+
+    $(document).on('click', '.edit_adj_filters_btn', function() {
+        $(this).closest('tr').next('.adj_filters_row').toggle();
+    });
+
+    $(document).on('click', '.add_adj_filter_btn', function() {
+        var rule_row = $(this).closest('.adj_filters_row').prev('.adj_rule_row');
+        addAdjFilter(rule_row, {});
+        updateAdjFilterCount(rule_row);
+        updateAdjRulesJson();
+    });
+
+    $(document).on('click', '.remove_adj_filter_btn', function() {
+        var rule_row = $(this).closest('.adj_filters_row').prev('.adj_rule_row');
+        $(this).closest('.adj_filter_row').remove();
+        updateAdjFilterCount(rule_row);
         updateAdjRulesJson();
     });
 
@@ -493,14 +603,6 @@ LLO:
                    </span>
                 </li>
 
-                <!-- Doesn't seem to do anything in Koha, so let's not bother showing it
-                <li>
-                   <label for="shipment_charges_alc_dl">Shipping - Use ALC DL: </label>
-                   <input type="checkbox" name="shipment_charges_alc_dl" id="shipment_charges_alc_dl" value="1" [% IF shipment_charges_alc_dl %]checked="checked"[% END %]>
-                   <span class="hint">Add ALC charges of type DL ( Delivery ) to the shipping cost for an invoice.</span>
-                </li>
-                -->
-
                 <li>
                    <label for="shipment_charges_moa_8">Shipping - MOA+8: </label>
                    <input type="checkbox" name="shipment_charges_moa_8" id="shipment_charges_moa_8" value="1" [% IF shipment_charges_moa_8 %]checked="checked"[% END %]>
@@ -596,10 +698,33 @@ LLO:
               <legend>Invoice Adjustments from MOA Segments</legend>
               <p>Create invoice adjustments automatically from MOA segments in EDIFACT invoices. Each rule matches a specific MOA qualifier and creates an adjustment with the specified settings. These are independent of the shipment charge MOA settings above.</p>
 
+              <p>
+                A qualifier on its own is often not enough to tell two charges apart. A vendor may send every
+                value-added charge as <em>MOA+8</em>, with only the preceding <em>ALC</em> saying which charge it is:
+              </p>
+              <pre style="margin-left: 2em;">ALC+C++6++C&amp;P'
+MOA+8:397.50'
+ALC+C++6++JKT'
+MOA+8:77.76'</pre>
+              <p>
+                Add filters to a rule to match on the segments governing the MOA as well as its qualifier. A rule with
+                no filters matches on the qualifier alone. Where a rule has several filters, all of them must match.
+              </p>
+              <ul>
+                <li><strong>Segment</strong> is a segment tag such as <em>ALC</em> or <em>TAX</em>, or one of
+                    <em>section</em> (header, line or summary), <em>line</em> or <em>currency</em>.</li>
+                <li><strong>Element</strong> is a position within that segment, such as <em>4</em> or <em>4.0</em>.
+                    Leave it empty to test the value against every part of the segment, which is useful when a vendor
+                    doesn't put the code where the standard says it goes. For the example above, use <em>4.0</em>.</li>
+                <li><strong>Value</strong> comparisons ignore case and surrounding spaces. <em>!=</em> passes when
+                    nothing in the segment matches, so it also passes when the segment isn't there at all.</li>
+              </ul>
+
               <table id="invoice_adj_rules_table" style="width: 100%;">
                   <thead>
                       <tr>
                           <th>MOA Qualifier</th>
+                          <th>Filters</th>
                           <th>Reason (ADJ_REASON)</th>
                           <th>Note</th>
                           <th>Budget ID</th>
