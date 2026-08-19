@@ -27,7 +27,7 @@ use Koha::EDI;
 use Koha::Items;
 
 ## Here we set our plugin version
-our $VERSION = "4.4.1";
+our $VERSION = "4.4.3";
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
@@ -35,7 +35,7 @@ our $metadata = {
     author          => 'Kyle M Hall',
     description     => 'Edifact Enhanced plugin',
     date_authored   => '2015-12-21',
-    date_updated    => '2026-08-17',
+    date_updated    => '2026-08-19',
     minimum_version => '25.11.00',
     maximum_version => undef,
     version         => $VERSION,
